@@ -1,0 +1,12 @@
+Apr 12, 2016 5:51:33 PM display.DisplayManager start
+INFO: Set Display Mode:960*640
+Apr 12, 2016 5:51:33 PM display.DisplayManager start
+INFO: Create Display
+Apr 12, 2016 5:51:33 PM display.DisplayManager start
+INFO: Initialize OpenGL
+Apr 12, 2016 5:51:37 PM game.GameState registerId
+INFO: This game state is registered as : ID 0
+Apr 12, 2016 5:51:37 PM game.GameManager startGame
+INFO: Start Game State at : ID 0
+Apr 12, 2016 5:51:37 PM display.DisplayManager start
+INFO: Close Display
