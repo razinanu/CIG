@@ -20,6 +20,13 @@ import commandcenter.CommandCenter;
  * @author Taichi
  */
 public class Ranezi implements AIInterface {
+	
+	private enum JumpState {
+		RISING,
+		PEAK,
+		FALLING,
+		ON_GROUND
+	};
 
   private Simulator simulator;
   private Key key;
@@ -29,6 +36,7 @@ public class Ranezi implements AIInterface {
 
   /** 大本のFrameData */
   private FrameData frameData;
+  private int groundY; 
 
   /** 大本よりFRAME_AHEAD分遅れたFrameData */
   private FrameData simulatorAheadFrameData;
@@ -38,7 +46,10 @@ public class Ranezi implements AIInterface {
 
   /** 相手が行える行動全て */
   private LinkedList<Action> oppActions;
-
+  
+  /**position of enemy in 3 last moves two entries per time step x and y */
+  private LinkedList<Integer> oppPos;
+  
   /** 自分の情報 */
   private CharacterData myCharacter;
 
@@ -96,6 +107,7 @@ public class Ranezi implements AIInterface {
 
     this.myActions = new LinkedList<Action>();
     this.oppActions = new LinkedList<Action>();
+    this.oppPos = new LinkedList<Integer>();
 
     simulator = gameData.getSimulator();
 
@@ -168,16 +180,57 @@ public class Ranezi implements AIInterface {
 
     myCharacter = playerNumber ? simulatorAheadFrameData.getP1() : simulatorAheadFrameData.getP2();
     oppCharacter = playerNumber ? simulatorAheadFrameData.getP2() : simulatorAheadFrameData.getP1();
+    oppPos.add(oppCharacter.getX());
+    oppPos.add(oppCharacter.getY());
+    if (oppPos.size() == 2){
+    	groundY = oppPos.get(1);
+    	
+    }
+    if(oppPos.size() > 6)
+    {
+    	oppPos.removeFirst();
+    	oppPos.removeFirst();
+    }
 
     setMyAction();
     setOppAction();
   }
+  public JumpState oppFindJumpState(){
+	 if(oppPos.size() < 6)
+		 return JumpState.ON_GROUND;
+	  int currY = oppPos.get(5);
+	  int lastY = oppPos.get(3);
+	  int last2Y = oppPos.get(1);
+	  
+	  if(oppCharacter.getState() != State.AIR)
+		  return JumpState.ON_GROUND;
+	  
+	  if(lastY <= last2Y)
+	  {
+		  if(currY < lastY)
+			  return JumpState.RISING;
+		  else if(currY > lastY)
+			  return JumpState.PEAK;
+	  }
+	  else
+	  {
+		  return JumpState.FALLING;
+	  }
+	  
+	  return JumpState.ON_GROUND;
+  }
 
   public void setMyAction() {
     myActions.clear();
-
+    
+    int distanceX=commandCenter.getDistanceX();
+    int distanceY= commandCenter.getDistanceY();
+    int oppEnergy = oppCharacter.getEnergy();
+    JumpState oppJumpState = oppFindJumpState();
+    //System.out.println("JumpState"+ oppJumpState);
+    
     int energy = myCharacter.getEnergy();
-
+    
     if (myCharacter.getState() == State.AIR) {
       for (int i = 0; i < actionAir.length; i++) {
         if (Math.abs(myMotion.elementAt(Action.valueOf(actionAir[i].name()).ordinal())
@@ -186,16 +239,29 @@ public class Ranezi implements AIInterface {
         }
       }
     } else {
+    	//ToDo check if the player is too far to enemy 
       if (Math.abs(myMotion.elementAt(Action.valueOf(spSkill.name()).ordinal())
           .getAttackStartAddEnergy()) <= energy) {
         myActions.add(spSkill);
       }
 
-      for (int i = 0; i < actionGround.length; i++) {
-        if (Math.abs(myMotion.elementAt(Action.valueOf(actionGround[i].name()).ordinal())
-            .getAttackStartAddEnergy()) <= energy) {
-          myActions.add(actionGround[i]);
-        }
+      if(distanceX > gameData.getStageXMax()/3)
+      {
+    	  if (Math.abs(myMotion.elementAt(Action.valueOf(Action.DASH.name()).ordinal())
+    	          .getAttackStartAddEnergy()) <= energy)
+    		  myActions.add(Action.DASH);
+    	  
+    	  myActions.add(Action.FORWARD_WALK);
+    	  myActions.add(Action.FOR_JUMP);
+      }
+      else
+      {
+	      for (int i = 0; i < actionGround.length; i++) {
+	        if (Math.abs(myMotion.elementAt(Action.valueOf(actionGround[i].name()).ordinal())
+	            .getAttackStartAddEnergy()) <= energy) {
+	          myActions.add(actionGround[i]);
+	        }
+	      }
       }
     }
 
