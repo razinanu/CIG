@@ -20,277 +20,291 @@ import commandcenter.CommandCenter;
  * @author Taichi
  */
 public class Ranezi implements AIInterface {
-	
+
 	private enum JumpState {
-		RISING,
-		PEAK,
-		FALLING,
-		ON_GROUND
+		RISING, PEAK, FALLING, ON_GROUND
 	};
 
-  private Simulator simulator;
-  private Key key;
-  private CommandCenter commandCenter;
-  private boolean playerNumber;
-  private GameData gameData;
+	private Simulator simulator;
+	private Key key;
+	private CommandCenter commandCenter;
+	private boolean playerNumber;
+	private GameData gameData;
 
-  /** 大本のFrameData */
-  private FrameData frameData;
-  private int groundY; 
+	/** 大本のFrameData */
+	private FrameData frameData;
+	private int groundY;
 
-  /** 大本よりFRAME_AHEAD分遅れたFrameData */
-  private FrameData simulatorAheadFrameData;
+	/** 大本よりFRAME_AHEAD分遅れたFrameData */
+	private FrameData simulatorAheadFrameData;
 
-  /** 自分が行える行動全て */
-  private LinkedList<Action> myActions;
+	/** 自分が行える行動全て */
+	private LinkedList<Action> myActions;
 
-  /** 相手が行える行動全て */
-  private LinkedList<Action> oppActions;
-  
-  /**position of enemy in 3 last moves two entries per time step x and y */
-  private LinkedList<Integer> oppPos;
-  
-  /** 自分の情報 */
-  private CharacterData myCharacter;
+	/** 相手が行える行動全て */
+	private LinkedList<Action> oppActions;
 
-  /** 相手の情報 */
-  private CharacterData oppCharacter;
+	/** position of enemy in 3 last moves two entries per time step x and y */
+	private LinkedList<Integer> oppPos;
 
-  /** フレームの調整用時間(JerryMizunoAIを参考) */
-  private static final int FRAME_AHEAD = 14;
+	/** 自分の情報 */
+	private CharacterData myCharacter;
 
-  private Vector<MotionData> myMotion;
+	/** 相手の情報 */
+	private CharacterData oppCharacter;
 
-  private Vector<MotionData> oppMotion;
+	/** フレームの調整用時間(JerryMizunoAIを参考) */
+	private static final int FRAME_AHEAD = 14;
 
-  private Action[] actionAir;
+	private Vector<MotionData> myMotion;
 
-  private Action[] actionGround;
+	private Vector<MotionData> oppMotion;
 
-  private Action spSkill;
+	private Action[] actionAir;
 
-  private Node rootNode;
+	private Action[] actionGround;
 
-  /** デバッグモードであるかどうか。trueの場合、様々なログが出力される */
-  public static final boolean DEBUG_MODE = false;
+	private Action spSkill;
 
-  @Override
-  public void close() {}
+	private Node rootNode;
 
-  @Override
-  public String getCharacter() {
-    return CHARACTER_ZEN;
-  }
+	/** デバッグモードであるかどうか。trueの場合、様々なログが出力される */
+	public static final boolean DEBUG_MODE = false;
 
-  @Override
-  public void getInformation(FrameData frameData) {
-    this.frameData = frameData;
-    this.commandCenter.setFrameData(this.frameData, playerNumber);
+	@Override
+	public void close() {
+	}
 
-    if (playerNumber) {
-      myCharacter = frameData.getP1();
-      oppCharacter = frameData.getP2();
-    } else {
-      myCharacter = frameData.getP2();
-      oppCharacter = frameData.getP1();
-    }
-  }
+	@Override
+	public String getCharacter() {
+		return CHARACTER_ZEN;
+	}
 
-  @Override
-  public int initialize(GameData gameData, boolean playerNumber) {
-    this.playerNumber = playerNumber;
-    this.gameData = gameData;
+	@Override
+	public void getInformation(FrameData frameData) {
+		this.frameData = frameData;
+		this.commandCenter.setFrameData(this.frameData, playerNumber);
 
-    this.key = new Key();
-    this.frameData = new FrameData();
-    this.commandCenter = new CommandCenter();
+		if (playerNumber) {
+			myCharacter = frameData.getP1();
+			oppCharacter = frameData.getP2();
+		} else {
+			myCharacter = frameData.getP2();
+			oppCharacter = frameData.getP1();
+		}
+	}
 
-    this.myActions = new LinkedList<Action>();
-    this.oppActions = new LinkedList<Action>();
-    this.oppPos = new LinkedList<Integer>();
+	@Override
+	public int initialize(GameData gameData, boolean playerNumber) {
+		this.playerNumber = playerNumber;
+		this.gameData = gameData;
 
-    simulator = gameData.getSimulator();
+		this.key = new Key();
+		this.frameData = new FrameData();
+		this.commandCenter = new CommandCenter();
 
-    actionAir =
-        new Action[] {Action.AIR_GUARD, Action.AIR_A, Action.AIR_B, Action.AIR_DA, Action.AIR_DB,
-            Action.AIR_FA, Action.AIR_FB, Action.AIR_UA, Action.AIR_UB, Action.AIR_D_DF_FA,
-            Action.AIR_D_DF_FB, Action.AIR_F_D_DFA, Action.AIR_F_D_DFB, Action.AIR_D_DB_BA,
-            Action.AIR_D_DB_BB};
-    actionGround =
-        new Action[] {Action.STAND_D_DB_BA, Action.BACK_STEP, Action.FORWARD_WALK, Action.DASH,
-            Action.JUMP, Action.FOR_JUMP, Action.BACK_JUMP, Action.STAND_GUARD,
-            Action.CROUCH_GUARD, Action.THROW_A, Action.THROW_B, Action.STAND_A, Action.STAND_B,
-            Action.CROUCH_A, Action.CROUCH_B, Action.STAND_FA, Action.STAND_FB, Action.CROUCH_FA,
-            Action.CROUCH_FB, Action.STAND_D_DF_FA, Action.STAND_D_DF_FB, Action.STAND_F_D_DFA,
-            Action.STAND_F_D_DFB, Action.STAND_D_DB_BB};
-    spSkill = Action.STAND_D_DF_FC;
+		this.myActions = new LinkedList<Action>();
+		this.oppActions = new LinkedList<Action>();
+		this.oppPos = new LinkedList<Integer>();
 
-    myMotion = this.playerNumber ? gameData.getPlayerOneMotion() : gameData.getPlayerTwoMotion();
-    oppMotion = this.playerNumber ? gameData.getPlayerTwoMotion() : gameData.getPlayerOneMotion();
+		simulator = gameData.getSimulator();
 
-    return 0;
-  }
+		actionAir = new Action[] { Action.AIR_GUARD, Action.AIR_A, Action.AIR_B, Action.AIR_DA, Action.AIR_DB,
+				Action.AIR_FA, Action.AIR_FB, Action.AIR_UA, Action.AIR_UB, Action.AIR_D_DF_FA, Action.AIR_D_DF_FB,
+				Action.AIR_F_D_DFA, Action.AIR_F_D_DFB, Action.AIR_D_DB_BA, Action.AIR_D_DB_BB };
+		actionGround = new Action[] { Action.STAND_D_DB_BA, Action.BACK_STEP, Action.FORWARD_WALK, Action.DASH,
+				Action.JUMP, Action.FOR_JUMP, Action.BACK_JUMP, Action.STAND_GUARD, Action.CROUCH_GUARD, Action.THROW_A,
+				Action.THROW_B, Action.STAND_A, Action.STAND_B, Action.CROUCH_A, Action.CROUCH_B, Action.STAND_FA,
+				Action.STAND_FB, Action.CROUCH_FA, Action.CROUCH_FB, Action.STAND_D_DF_FA, Action.STAND_D_DF_FB,
+				Action.STAND_F_D_DFA, Action.STAND_F_D_DFB, Action.STAND_D_DB_BB };
+		spSkill = Action.STAND_D_DF_FC;
 
-  @Override
-  public Key input() {
-    return key;
-  }
+		myMotion = this.playerNumber ? gameData.getPlayerOneMotion() : gameData.getPlayerTwoMotion();
+		oppMotion = this.playerNumber ? gameData.getPlayerTwoMotion() : gameData.getPlayerOneMotion();
 
-  @Override
-  public void processing() {
+		return 0;
+	}
 
-    if (canProcessing()) {
-      if (commandCenter.getskillFlag()) {
-        key = commandCenter.getSkillKey();
-      } else {
-        key.empty();
-        commandCenter.skillCancel();
+	@Override
+	public Key input() {
+		return key;
+	}
 
-        mctsPrepare(); // MCTSの下準備を行う
-        rootNode =
-            new Node(simulatorAheadFrameData, null, myActions, oppActions, gameData, playerNumber,
-                commandCenter);
-        rootNode.createNode();
+	@Override
+	public void processing() {
 
-        Action bestAction = rootNode.mcts(); // MCTSの実行
-        if (Ranezi.DEBUG_MODE) {
-          rootNode.printNode(rootNode);
-        }
+		if (canProcessing()) {
+			if (commandCenter.getskillFlag()) {
+				key = commandCenter.getSkillKey();
+			} else {
+				key.empty();
+				commandCenter.skillCancel();
 
-        commandCenter.commandCall(bestAction.name()); // MCTSで選択された行動を実行する
-      }
-    }
-  }
+				mctsPrepare(); // MCTSの下準備を行う
+				rootNode = new Node(simulatorAheadFrameData, null, myActions, oppActions, gameData, playerNumber,
+						commandCenter);
+				rootNode.createNode();
 
-  /**
-   * AIが行動できるかどうかを判別する
-   *
-   * @return AIが行動できるかどうか
-   */
-  public boolean canProcessing() {
-    return !frameData.getEmptyFlag() && frameData.getRemainingTime() > 0;
-  }
+				Action bestAction = rootNode.mcts(); // MCTSの実行
+				if (Ranezi.DEBUG_MODE) {
+					rootNode.printNode(rootNode);
+				}
 
-  /**
-   * MCTSの下準備 <br>
-   * 14フレーム進ませたFrameDataの取得などを行う
-   */
-  public void mctsPrepare() {
-    simulatorAheadFrameData = simulator.simulate(frameData, playerNumber, null, null, FRAME_AHEAD);
+				commandCenter.commandCall(bestAction.name()); // MCTSで選択された行動を実行する
+			}
+		}
+	}
 
-    myCharacter = playerNumber ? simulatorAheadFrameData.getP1() : simulatorAheadFrameData.getP2();
-    oppCharacter = playerNumber ? simulatorAheadFrameData.getP2() : simulatorAheadFrameData.getP1();
-    oppPos.add(oppCharacter.getX());
-    oppPos.add(oppCharacter.getY());
-    if (oppPos.size() == 2){
-    	groundY = oppPos.get(1);
-    	
-    }
-    if(oppPos.size() > 6)
-    {
-    	oppPos.removeFirst();
-    	oppPos.removeFirst();
-    }
+	/**
+	 * AIが行動できるかどうかを判別する
+	 *
+	 * @return AIが行動できるかどうか
+	 */
+	public boolean canProcessing() {
+		return !frameData.getEmptyFlag() && frameData.getRemainingTime() > 0;
+	}
 
-    setMyAction();
-    setOppAction();
-  }
-  public JumpState oppFindJumpState(){
-	 if(oppPos.size() < 6)
-		 return JumpState.ON_GROUND;
-	  int currY = oppPos.get(5);
-	  int lastY = oppPos.get(3);
-	  int last2Y = oppPos.get(1);
-	  
-	  if(oppCharacter.getState() != State.AIR)
-		  return JumpState.ON_GROUND;
-	  
-	  if(lastY <= last2Y)
-	  {
-		  if(currY < lastY)
-			  return JumpState.RISING;
-		  else if(currY > lastY)
-			  return JumpState.PEAK;
-	  }
-	  else
-	  {
-		  return JumpState.FALLING;
-	  }
-	  
-	  return JumpState.ON_GROUND;
-  }
+	/**
+	 * MCTSの下準備 <br>
+	 * 14フレーム進ませたFrameDataの取得などを行う
+	 */
+	public void mctsPrepare() {
+		simulatorAheadFrameData = simulator.simulate(frameData, playerNumber, null, null, FRAME_AHEAD);
 
-  public void setMyAction() {
-    myActions.clear();
-    
-    int distanceX=commandCenter.getDistanceX();
-    int distanceY= commandCenter.getDistanceY();
-    int oppEnergy = oppCharacter.getEnergy();
-    JumpState oppJumpState = oppFindJumpState();
-    //System.out.println("JumpState"+ oppJumpState);
-    
-    int energy = myCharacter.getEnergy();
-    
-    if (myCharacter.getState() == State.AIR) {
-      for (int i = 0; i < actionAir.length; i++) {
-        if (Math.abs(myMotion.elementAt(Action.valueOf(actionAir[i].name()).ordinal())
-            .getAttackStartAddEnergy()) <= energy) {
-          myActions.add(actionAir[i]);
-        }
-      }
-    } else {
-    	//ToDo check if the player is too far to enemy 
-      if (Math.abs(myMotion.elementAt(Action.valueOf(spSkill.name()).ordinal())
-          .getAttackStartAddEnergy()) <= energy) {
-        myActions.add(spSkill);
-      }
+		myCharacter = playerNumber ? simulatorAheadFrameData.getP1() : simulatorAheadFrameData.getP2();
+		oppCharacter = playerNumber ? simulatorAheadFrameData.getP2() : simulatorAheadFrameData.getP1();
+		oppPos.add(oppCharacter.getX());
+		oppPos.add(oppCharacter.getY());
+		if (oppPos.size() == 2) {
+			groundY = oppPos.get(1);
 
-      if(distanceX > gameData.getStageXMax()/3)
-      {
-    	  if (Math.abs(myMotion.elementAt(Action.valueOf(Action.DASH.name()).ordinal())
-    	          .getAttackStartAddEnergy()) <= energy)
-    		  myActions.add(Action.DASH);
-    	  
-    	  myActions.add(Action.FORWARD_WALK);
-    	  myActions.add(Action.FOR_JUMP);
-      }
-      else
-      {
-	      for (int i = 0; i < actionGround.length; i++) {
-	        if (Math.abs(myMotion.elementAt(Action.valueOf(actionGround[i].name()).ordinal())
-	            .getAttackStartAddEnergy()) <= energy) {
-	          myActions.add(actionGround[i]);
-	        }
-	      }
-      }
-    }
+		}
+		if (oppPos.size() > 6) {
+			oppPos.removeFirst();
+			oppPos.removeFirst();
+		}
 
-  }
+		setMyAction();
+		setOppAction();
+	}
 
-  public void setOppAction() {
-    oppActions.clear();
+	public JumpState oppFindJumpState() {
+		if (oppPos.size() < 6)
+			return JumpState.ON_GROUND;
+		int currY = oppPos.get(5);
+		int lastY = oppPos.get(3);
+		int last2Y = oppPos.get(1);
 
-    int energy = oppCharacter.getEnergy();
+		if (oppCharacter.getState() != State.AIR)
+			return JumpState.ON_GROUND;
 
-    if (oppCharacter.getState() == State.AIR) {
-      for (int i = 0; i < actionAir.length; i++) {
-        if (Math.abs(oppMotion.elementAt(Action.valueOf(actionAir[i].name()).ordinal())
-            .getAttackStartAddEnergy()) <= energy) {
-          oppActions.add(actionAir[i]);
-        }
-      }
-    } else {
-      if (Math.abs(oppMotion.elementAt(Action.valueOf(spSkill.name()).ordinal())
-          .getAttackStartAddEnergy()) <= energy) {
-        oppActions.add(spSkill);
-      }
+		if (lastY <= last2Y) {
+			if (currY < lastY)
+				return JumpState.RISING;
+			else if (currY > lastY)
+				return JumpState.PEAK;
+		} else {
+			return JumpState.FALLING;
+		}
 
-      for (int i = 0; i < actionGround.length; i++) {
-        if (Math.abs(oppMotion.elementAt(Action.valueOf(actionGround[i].name()).ordinal())
-            .getAttackStartAddEnergy()) <= energy) {
-          oppActions.add(actionGround[i]);
-        }
-      }
-    }
-  }
+		return JumpState.ON_GROUND;
+	}
+
+	public void setMyAction() {
+		myActions.clear();
+
+		int distanceX = commandCenter.getDistanceX();
+		int distanceY = commandCenter.getDistanceY();
+		int oppEnergy = oppCharacter.getEnergy();
+		JumpState oppJumpState = oppFindJumpState();
+		// System.out.println("JumpState"+ oppJumpState);
+
+		int energy = myCharacter.getEnergy();
+
+		if (myCharacter.getState() == State.AIR) {
+			for (int i = 0; i < actionAir.length; i++) {
+				if (Math.abs(myMotion.elementAt(Action.valueOf(actionAir[i].name()).ordinal())
+						.getAttackStartAddEnergy()) <= energy) {
+					myActions.add(actionAir[i]);
+				}
+			}
+		} else {
+			// ToDo check if the player is too far to enemy
+			if (Math.abs(
+					myMotion.elementAt(Action.valueOf(spSkill.name()).ordinal()).getAttackStartAddEnergy()) <= energy) {
+				myActions.add(spSkill);
+			}
+
+			if (distanceX > gameData.getStageXMax() / 5) {
+				int maxActions = 3;
+				boolean throwHappened = false;
+				if (oppMotion.size() < maxActions)
+					maxActions = oppMotion.size();
+
+				// TODO: How to find out which moves the opponent used lately?
+				// Using oppMotion does not work
+				for (int i = 0; i < maxActions; i++) {
+					// System.out.print(oppMotion.get(i).getMotionName() + " -
+					// ");
+					
+					System.out.println(oppCharacter.getAction().toString() + " - ");
+
+					if (oppMotion.get(i).getMotionName().equals(Action.THROW_A.name())
+							|| oppMotion.get(i).getMotionName().equals(Action.THROW_B.name())) {
+						throwHappened = true;
+						System.out.println("throw happened");
+					}
+				}
+				System.out.println();
+
+				if (throwHappened) {
+					myActions.add(Action.CROUCH_GUARD);
+					myActions.add(Action.STAND_GUARD);
+					myActions.add(Action.CROUCH);
+				}
+
+				if (Math.abs(myMotion.elementAt(Action.valueOf(Action.DASH.name()).ordinal())
+						.getAttackStartAddEnergy()) <= energy)
+					myActions.add(Action.DASH);
+
+				myActions.add(Action.FORWARD_WALK);
+				// myActions.add(Action.FOR_JUMP);
+			} else {
+				for (int i = 0; i < actionGround.length; i++) {
+					if (Math.abs(myMotion.elementAt(Action.valueOf(actionGround[i].name()).ordinal())
+							.getAttackStartAddEnergy()) <= energy) {
+						myActions.add(actionGround[i]);
+					}
+				}
+			}
+		}
+
+	}
+
+	public void setOppAction() {
+		oppActions.clear();
+
+		int energy = oppCharacter.getEnergy();
+
+		if (oppCharacter.getState() == State.AIR) {
+			for (int i = 0; i < actionAir.length; i++) {
+				if (Math.abs(oppMotion.elementAt(Action.valueOf(actionAir[i].name()).ordinal())
+						.getAttackStartAddEnergy()) <= energy) {
+					oppActions.add(actionAir[i]);
+				}
+			}
+		} else {
+			if (Math.abs(oppMotion.elementAt(Action.valueOf(spSkill.name()).ordinal())
+					.getAttackStartAddEnergy()) <= energy) {
+				oppActions.add(spSkill);
+			}
+
+			for (int i = 0; i < actionGround.length; i++) {
+				if (Math.abs(oppMotion.elementAt(Action.valueOf(actionGround[i].name()).ordinal())
+						.getAttackStartAddEnergy()) <= energy) {
+					oppActions.add(actionGround[i]);
+				}
+			}
+		}
+	}
 }
