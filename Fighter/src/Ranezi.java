@@ -1,5 +1,6 @@
 import enumerate.Action;
 import enumerate.State;
+import fighting.Attack;
 import gameInterface.AIInterface;
 
 import java.util.LinkedList;
@@ -14,11 +15,6 @@ import structs.MotionData;
 
 import commandcenter.CommandCenter;
 
-/**
- * MCTS(モンテカルロ木探索)により実装するAI
- *
- * @author Taichi
- */
 public class Ranezi implements AIInterface {
 
 	private enum JumpState {
@@ -31,29 +27,23 @@ public class Ranezi implements AIInterface {
 	private boolean playerNumber;
 	private GameData gameData;
 
-	/** 大本のFrameData */
 	private FrameData frameData;
-	private int groundY;
 
-	/** 大本よりFRAME_AHEAD分遅れたFrameData */
 	private FrameData simulatorAheadFrameData;
 
-	/** 自分が行える行動全て */
 	private LinkedList<Action> myActions;
 
-	/** 相手が行える行動全て */
 	private LinkedList<Action> oppActions;
 
-	/** position of enemy in 3 last moves two entries per time step x and y */
-	private LinkedList<Integer> oppPos;
+	private LinkedList<Integer> oppLastPos;
 
-	/** 自分の情報 */
+	private LinkedList<Action> oppLastMoves;
+	private LinkedList<Attack> oppLastAttacks;
+
 	private CharacterData myCharacter;
 
-	/** 相手の情報 */
 	private CharacterData oppCharacter;
 
-	/** フレームの調整用時間(JerryMizunoAIを参考) */
 	private static final int FRAME_AHEAD = 14;
 
 	private Vector<MotionData> myMotion;
@@ -68,7 +58,6 @@ public class Ranezi implements AIInterface {
 
 	private Node rootNode;
 
-	/** デバッグモードであるかどうか。trueの場合、様々なログが出力される */
 	public static final boolean DEBUG_MODE = false;
 
 	@Override
@@ -105,13 +94,16 @@ public class Ranezi implements AIInterface {
 
 		this.myActions = new LinkedList<Action>();
 		this.oppActions = new LinkedList<Action>();
-		this.oppPos = new LinkedList<Integer>();
+		this.oppLastPos = new LinkedList<Integer>();
+		this.oppLastMoves = new LinkedList<Action>();
 
 		simulator = gameData.getSimulator();
-
+		// Removed Action.AIR_D_DF_FB
+		// Removed Action.AIR_D_DF_FA
 		actionAir = new Action[] { Action.AIR_GUARD, Action.AIR_A, Action.AIR_B, Action.AIR_DA, Action.AIR_DB,
-				Action.AIR_FA, Action.AIR_FB, Action.AIR_UA, Action.AIR_UB, Action.AIR_D_DF_FA, Action.AIR_D_DF_FB,
-				Action.AIR_F_D_DFA, Action.AIR_F_D_DFB, Action.AIR_D_DB_BA, Action.AIR_D_DB_BB };
+				Action.AIR_FA, Action.AIR_FB, Action.AIR_UA, Action.AIR_UB, Action.AIR_F_D_DFA, Action.AIR_F_D_DFB,
+				Action.AIR_D_DB_BA, Action.AIR_D_DB_BB, Action.AIR_D_DF_FB, Action.AIR_D_DF_FA };
+		// Removed Action.STAND_D_DB_BB
 		actionGround = new Action[] { Action.STAND_D_DB_BA, Action.BACK_STEP, Action.FORWARD_WALK, Action.DASH,
 				Action.JUMP, Action.FOR_JUMP, Action.BACK_JUMP, Action.STAND_GUARD, Action.CROUCH_GUARD, Action.THROW_A,
 				Action.THROW_B, Action.STAND_A, Action.STAND_B, Action.CROUCH_A, Action.CROUCH_B, Action.STAND_FA,
@@ -140,60 +132,54 @@ public class Ranezi implements AIInterface {
 				key.empty();
 				commandCenter.skillCancel();
 
-				mctsPrepare(); // MCTSの下準備を行う
+				mctsPrepare();
 				rootNode = new Node(simulatorAheadFrameData, null, myActions, oppActions, gameData, playerNumber,
 						commandCenter);
 				rootNode.createNode();
 
-				Action bestAction = rootNode.mcts(); // MCTSの実行
+				Action bestAction = rootNode.mcts();
 				if (Ranezi.DEBUG_MODE) {
 					rootNode.printNode(rootNode);
 				}
-
-				commandCenter.commandCall(bestAction.name()); // MCTSで選択された行動を実行する
+				commandCenter.commandCall(bestAction.name());
 			}
 		}
+		// System.out.println(oppCharacter.getAttack().checkProjectile());
+		// oppLastAttacks.add(oppCharacter.getAttack());
+		// if (oppLastAttacks.size() > 10)
+		// oppLastAttacks.removeFirst();
 	}
 
-	/**
-	 * AIが行動できるかどうかを判別する
-	 *
-	 * @return AIが行動できるかどうか
-	 */
 	public boolean canProcessing() {
 		return !frameData.getEmptyFlag() && frameData.getRemainingTime() > 0;
 	}
 
-	/**
-	 * MCTSの下準備 <br>
-	 * 14フレーム進ませたFrameDataの取得などを行う
-	 */
 	public void mctsPrepare() {
 		simulatorAheadFrameData = simulator.simulate(frameData, playerNumber, null, null, FRAME_AHEAD);
 
 		myCharacter = playerNumber ? simulatorAheadFrameData.getP1() : simulatorAheadFrameData.getP2();
 		oppCharacter = playerNumber ? simulatorAheadFrameData.getP2() : simulatorAheadFrameData.getP1();
-		oppPos.add(oppCharacter.getX());
-		oppPos.add(oppCharacter.getY());
-		if (oppPos.size() == 2) {
-			groundY = oppPos.get(1);
+		oppLastPos.add(oppCharacter.getX());
+		oppLastPos.add(oppCharacter.getY());
+		if (oppLastPos.size() > 6) {
+			oppLastPos.removeFirst();
+			oppLastPos.removeFirst();
+		}
 
-		}
-		if (oppPos.size() > 6) {
-			oppPos.removeFirst();
-			oppPos.removeFirst();
-		}
+		oppLastMoves.add(oppCharacter.getAction());
+		if (oppLastMoves.size() > 10)
+			oppLastMoves.removeFirst();
 
 		setMyAction();
 		setOppAction();
 	}
 
-	public JumpState oppFindJumpState() {
-		if (oppPos.size() < 6)
+	private JumpState oppFindJumpState() {
+		if (oppLastPos.size() < 6)
 			return JumpState.ON_GROUND;
-		int currY = oppPos.get(5);
-		int lastY = oppPos.get(3);
-		int last2Y = oppPos.get(1);
+		int currY = oppLastPos.get(5);
+		int lastY = oppLastPos.get(3);
+		int last2Y = oppLastPos.get(1);
 
 		if (oppCharacter.getState() != State.AIR)
 			return JumpState.ON_GROUND;
@@ -210,14 +196,28 @@ public class Ranezi implements AIInterface {
 		return JumpState.ON_GROUND;
 	}
 
+	// private boolean checkForThrowAttack() {
+	// // Action with purple fire : STAND_D_DB_BA, STAND_D_DF_FA, STAND_D_DF_FB
+	// String[] fireActions = { "THROW_A", "THROW_B", "CROUCH_B", "STAND_A" };
+	//
+	// for (int i = 0; i < oppLastMoves.size(); i++) {
+	//
+	// if (oppLastMoves.get(i).toString().equals(fireActions[0])
+	// || oppLastMoves.get(i).toString().equals(fireActions[1])) {
+	// // System.out.println("throw happened");
+	// return true;
+	// }
+	// }
+	// return false;
+	// }
+
 	public void setMyAction() {
 		myActions.clear();
 
 		int distanceX = commandCenter.getDistanceX();
-		int distanceY = commandCenter.getDistanceY();
-		int oppEnergy = oppCharacter.getEnergy();
+		// int oppEnergy = oppCharacter.getEnergy();
 		JumpState oppJumpState = oppFindJumpState();
-		// System.out.println("JumpState"+ oppJumpState);
+		// boolean throwHappened = checkForThrowAttack();
 
 		int energy = myCharacter.getEnergy();
 
@@ -229,47 +229,34 @@ public class Ranezi implements AIInterface {
 				}
 			}
 		} else {
-			// ToDo check if the player is too far to enemy
+
 			if (Math.abs(
 					myMotion.elementAt(Action.valueOf(spSkill.name()).ordinal()).getAttackStartAddEnergy()) <= energy) {
 				myActions.add(spSkill);
 			}
 
-			if (distanceX > gameData.getStageXMax() / 5) {
-				int maxActions = 3;
-				boolean throwHappened = false;
-				if (oppMotion.size() < maxActions)
-					maxActions = oppMotion.size();
+			if (frameData.getAttack().size() > 0 && distanceX > gameData.getStageXMax() / 5) {
+				//myActions.add(Action.AIR_GUARD);
+				myActions.add(Action.FOR_JUMP);
+				myActions.add(Action.BACK_JUMP);
 
-				// TODO: How to find out which moves the opponent used lately?
-				// Using oppMotion does not work
-				for (int i = 0; i < maxActions; i++) {
-					// System.out.print(oppMotion.get(i).getMotionName() + " -
-					// ");
-					
-					System.out.println(oppCharacter.getAction().toString() + " - ");
-
-					if (oppMotion.get(i).getMotionName().equals(Action.THROW_A.name())
-							|| oppMotion.get(i).getMotionName().equals(Action.THROW_B.name())) {
-						throwHappened = true;
-						System.out.println("throw happened");
-					}
-				}
-				System.out.println();
-
-				if (throwHappened) {
-					myActions.add(Action.CROUCH_GUARD);
-					myActions.add(Action.STAND_GUARD);
-					myActions.add(Action.CROUCH);
-				}
-
-				if (Math.abs(myMotion.elementAt(Action.valueOf(Action.DASH.name()).ordinal())
-						.getAttackStartAddEnergy()) <= energy)
-					myActions.add(Action.DASH);
-
+			} else if (distanceX > gameData.getStageXMax() / 2) {
 				myActions.add(Action.FORWARD_WALK);
-				// myActions.add(Action.FOR_JUMP);
-			} else {
+
+			}
+
+			else if (oppJumpState == JumpState.RISING) {
+				myActions.add(Action.CROUCH_FA);
+				myActions.add(Action.STAND_FB);
+                myActions.add(Action.STAND_F_D_DFA);
+                
+
+			}
+			else if( oppJumpState == JumpState.PEAK){
+				myActions.add(Action.FOR_JUMP);
+			}
+
+			else {
 				for (int i = 0; i < actionGround.length; i++) {
 					if (Math.abs(myMotion.elementAt(Action.valueOf(actionGround[i].name()).ordinal())
 							.getAttackStartAddEnergy()) <= energy) {
