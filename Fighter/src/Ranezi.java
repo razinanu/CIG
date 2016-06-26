@@ -3,6 +3,7 @@ import enumerate.State;
 import fighting.Attack;
 import gameInterface.AIInterface;
 
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Vector;
 
@@ -35,7 +36,7 @@ public class Ranezi implements AIInterface {
 
 	private LinkedList<Action> oppActions;
 
-	private LinkedList<Integer> oppLastPos;
+	private LinkedList<Integer> oppLastYPos;
 
 	private LinkedList<Action> oppLastMoves;
 
@@ -93,7 +94,7 @@ public class Ranezi implements AIInterface {
 
 		this.myActions = new LinkedList<Action>();
 		this.oppActions = new LinkedList<Action>();
-		this.oppLastPos = new LinkedList<Integer>();
+		this.oppLastYPos = new LinkedList<Integer>();
 		this.oppLastMoves = new LinkedList<Action>();
 
 		simulator = gameData.getSimulator();
@@ -154,11 +155,9 @@ public class Ranezi implements AIInterface {
 
 		myCharacter = playerNumber ? simulatorAheadFrameData.getP1() : simulatorAheadFrameData.getP2();
 		oppCharacter = playerNumber ? simulatorAheadFrameData.getP2() : simulatorAheadFrameData.getP1();
-		oppLastPos.add(oppCharacter.getX());
-		oppLastPos.add(oppCharacter.getY());
-		if (oppLastPos.size() > 6) {
-			oppLastPos.removeFirst();
-			oppLastPos.removeFirst();
+		oppLastYPos.add(oppCharacter.getY());
+		if (oppLastYPos.size() > 3) {
+			oppLastYPos.removeFirst();
 		}
 
 		oppLastMoves.add(oppCharacter.getAction());
@@ -170,15 +169,30 @@ public class Ranezi implements AIInterface {
 	}
 
 	/*
+	 * Check whether the enemy has launched at least one projectile
+	 */
+	private boolean checkForProjectile() {
+		boolean opponentProjectile = false;
+		int ownNumber = (this.playerNumber) ? 0 : 1;
+		Iterator<Attack> itr = frameData.getAttack().iterator();
+		while (itr.hasNext() && !opponentProjectile) {
+			Attack current = itr.next();
+			if (current.getPlayerNumber() != ownNumber)
+				opponentProjectile = true;
+		}
+		return opponentProjectile;
+	}
+	
+	/*
 	 * Check whether the enemy is at the start or the middle or the end of his
 	 * jump process
 	 */
 	private JumpState oppFindJumpState() {
-		if (oppLastPos.size() < 6)
+		if (oppLastYPos.size() < 3)
 			return JumpState.ON_GROUND;
-		int currY = oppLastPos.get(5);
-		int lastY = oppLastPos.get(3);
-		int last2Y = oppLastPos.get(1);
+		int currY = oppLastYPos.get(2);
+		int lastY = oppLastYPos.get(1);
+		int last2Y = oppLastYPos.get(0);
 
 		if (oppCharacter.getState() != State.AIR)
 			return JumpState.ON_GROUND;
@@ -195,28 +209,12 @@ public class Ranezi implements AIInterface {
 		return JumpState.ON_GROUND;
 	}
 
-	// private boolean checkForThrowAttack() {
-	// // Action with purple fire : STAND_D_DB_BA, STAND_D_DF_FA, STAND_D_DF_FB
-	// String[] fireActions = { "THROW_A", "THROW_B", "CROUCH_B", "STAND_A" };
-	//
-	// for (int i = 0; i < oppLastMoves.size(); i++) {
-	//
-	// if (oppLastMoves.get(i).toString().equals(fireActions[0])
-	// || oppLastMoves.get(i).toString().equals(fireActions[1])) {
-	// // System.out.println("throw happened");
-	// return true;
-	// }
-	// }
-	// return false;
-	// }
-
 	public void setMyAction() {
 		myActions.clear();
 
 		int distanceX = commandCenter.getDistanceX();
-		// int oppEnergy = oppCharacter.getEnergy();
+		boolean opponentProjectile = checkForProjectile();
 		JumpState oppJumpState = oppFindJumpState();
-		// boolean throwHappened = checkForThrowAttack();
 
 		int energy = myCharacter.getEnergy();
 
@@ -235,10 +233,14 @@ public class Ranezi implements AIInterface {
 			}
 			// Check whether there is any projectile and they are not too close
 			// to each other
-			if (frameData.getAttack().size() > 0 && distanceX > gameData.getStageXMax() / 6) {
-				myActions.add(Action.AIR_GUARD);
-				// myActions.add(Action.FOR_JUMP);
+			if (opponentProjectile && distanceX > gameData.getStageXMax() / 4) {
 				myActions.add(Action.BACK_JUMP);
+			}
+			// Check whether there is any projectile and they are not too close
+			// to each other
+			else if (opponentProjectile && distanceX > gameData.getStageXMax() / 6) {
+
+				myActions.add(Action.FOR_JUMP);
 				// Check whether the players are far away to each other
 			} else if (distanceX > gameData.getStageXMax() / 2) {
 				myActions.add(Action.FORWARD_WALK);
