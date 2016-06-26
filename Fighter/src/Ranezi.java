@@ -38,7 +38,6 @@ public class Ranezi implements AIInterface {
 	private LinkedList<Integer> oppLastPos;
 
 	private LinkedList<Action> oppLastMoves;
-	private LinkedList<Attack> oppLastAttacks;
 
 	private CharacterData myCharacter;
 
@@ -98,12 +97,11 @@ public class Ranezi implements AIInterface {
 		this.oppLastMoves = new LinkedList<Action>();
 
 		simulator = gameData.getSimulator();
-		// Removed Action.AIR_D_DF_FB
-		// Removed Action.AIR_D_DF_FA
+
 		actionAir = new Action[] { Action.AIR_GUARD, Action.AIR_A, Action.AIR_B, Action.AIR_DA, Action.AIR_DB,
 				Action.AIR_FA, Action.AIR_FB, Action.AIR_UA, Action.AIR_UB, Action.AIR_F_D_DFA, Action.AIR_F_D_DFB,
 				Action.AIR_D_DB_BA, Action.AIR_D_DB_BB, Action.AIR_D_DF_FB, Action.AIR_D_DF_FA };
-		// Removed Action.STAND_D_DB_BB
+
 		actionGround = new Action[] { Action.STAND_D_DB_BA, Action.BACK_STEP, Action.FORWARD_WALK, Action.DASH,
 				Action.JUMP, Action.FOR_JUMP, Action.BACK_JUMP, Action.STAND_GUARD, Action.CROUCH_GUARD, Action.THROW_A,
 				Action.THROW_B, Action.STAND_A, Action.STAND_B, Action.CROUCH_A, Action.CROUCH_B, Action.STAND_FA,
@@ -144,10 +142,7 @@ public class Ranezi implements AIInterface {
 				commandCenter.commandCall(bestAction.name());
 			}
 		}
-		// System.out.println(oppCharacter.getAttack().checkProjectile());
-		// oppLastAttacks.add(oppCharacter.getAttack());
-		// if (oppLastAttacks.size() > 10)
-		// oppLastAttacks.removeFirst();
+
 	}
 
 	public boolean canProcessing() {
@@ -174,6 +169,10 @@ public class Ranezi implements AIInterface {
 		setOppAction();
 	}
 
+	/*
+	 * Check whether the enemy is at the start or the middle or the end of his
+	 * jump process
+	 */
 	private JumpState oppFindJumpState() {
 		if (oppLastPos.size() < 6)
 			return JumpState.ON_GROUND;
@@ -234,26 +233,22 @@ public class Ranezi implements AIInterface {
 					myMotion.elementAt(Action.valueOf(spSkill.name()).ordinal()).getAttackStartAddEnergy()) <= energy) {
 				myActions.add(spSkill);
 			}
-
-			if (frameData.getAttack().size() > 0 && distanceX > gameData.getStageXMax() / 5) {
-				//myActions.add(Action.AIR_GUARD);
-				myActions.add(Action.FOR_JUMP);
+			// Check whether there is any projectile and they are not too close
+			// to each other
+			if (frameData.getAttack().size() > 0 && distanceX > gameData.getStageXMax() / 6) {
+				myActions.add(Action.AIR_GUARD);
+				// myActions.add(Action.FOR_JUMP);
 				myActions.add(Action.BACK_JUMP);
-
+				// Check whether the players are far away to each other
 			} else if (distanceX > gameData.getStageXMax() / 2) {
 				myActions.add(Action.FORWARD_WALK);
 
 			}
-
+			// Check whether the enemy jumps up
 			else if (oppJumpState == JumpState.RISING) {
-				myActions.add(Action.CROUCH_FA);
 				myActions.add(Action.STAND_FB);
-                myActions.add(Action.STAND_F_D_DFA);
-                
+				myActions.add(Action.STAND_F_D_DFA);
 
-			}
-			else if( oppJumpState == JumpState.PEAK){
-				myActions.add(Action.FOR_JUMP);
 			}
 
 			else {
