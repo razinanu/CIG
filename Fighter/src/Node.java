@@ -12,64 +12,64 @@ import commandcenter.CommandCenter;
 import enumerate.Action;
 
 /**
- * MCTSで利用するNode
+ * Node in MCTS
  *
  * @author Taichi Miyazaki
  */
 public class Node {
 
-  /** UCTの実行時間 */
+  /** UCT execution time */
   public static final int UCT_TIME = 165 * 100000;
 
-  /** UCB1の定数Cの値 */
+  /** Value of C in UCB1 */
   public static final double UCB_C = 3;
 
-  /** 探索する木の深さ */
+  /** Depth of tree search */
   public static final int UCT_TREE_DEPTH = 2;
 
-  /** ノードを生成する閾値 */
+  /** Threshold for generating a node */
   public static final int UCT_CREATE_NODE_THRESHOULD = 10;
 
-  /** シミュレーションを行う時間 */
+  /** Time for performing simulation */
   public static final int SIMULATION_TIME = 60;
 
-  /** 乱数を利用するときに使う */
+  /** Use when in need of random numbers */
   private Random rnd;
 
-  /** 親ノード */
+  /** Parent node */
   private Node parent;
 
-  /** 子ノード */
+  /** Child node */
   private Node[] children;
 
-  /** ノードの深さ */
+  /** Node depth */
   private int depth;
 
-  /** ノードが探索された回数 */
+  /** Number of node visiting times */
   private int games;
 
-  /** UCB1値 */
+  /** UCB1 Value */
   private double ucb;
 
-  /** 評価値 */
+  /** Evaluation value */
   private double score;
 
-  /** 選択できる自分の全Action */
+  /** All selectable actions of self AI */
   private LinkedList<Action> myActions;
 
-  /** 選択できる相手の全Action */
+  /**  All selectable actions of the opponent */
   private LinkedList<Action> oppActions;
 
-  /** シミュレーションするときに利用する */
+  /** Use in simulation */
   private Simulator simulator;
 
-  /** 探索時に選んだ自分のAction */
+  /** Selected action by self AI during search */
   private LinkedList<Action> selectedMyActions;
 
-  /** シミュレーションする前の自分のHP */
+  /** Self HP before simulation */
   private int myOriginalHp;
 
-  /** シミュレーションする前の相手のHP */
+  /** Opponent HP before simulation */
   private int oppOriginalHp;
 
   private FrameData frameData;
@@ -121,12 +121,12 @@ public class Node {
   }
 
   /**
-   * MCTSを行う
+   * Perform MCTS
    *
-   * @return 最終的なノードの探索回数が多いAction
+   * @return action of the most visited node
    */
   public Action mcts() {
-    // 時間の限り、UCTを繰り返す
+    // Repeat UCT as many times as possible
     long start = System.nanoTime();
     for (; System.nanoTime() - start <= UCT_TIME;) {
       uct();
@@ -136,9 +136,9 @@ public class Node {
   }
 
   /**
-   * プレイアウト(シミュレーション)を行う
+   * Perform a playout (simulation)
    *
-   * @return プレイアウト結果の評価値
+   * @return the evaluation value of the playout
    */
   public double playout() {
 
@@ -158,15 +158,15 @@ public class Node {
     }
 
     FrameData nFrameData =
-        simulator.simulate(frameData, playerNumber, mAction, oppAction, SIMULATION_TIME); // シミュレーションを実行
+        simulator.simulate(frameData, playerNumber, mAction, oppAction, SIMULATION_TIME); // Perform simulation
 
     return getScore(nFrameData);
   }
 
   /**
-   * UCTを行う <br>
+   * Perform UCT
    *
-   * @return 評価値
+   * @return the evaluation value
    */
   public double uct() {
 
@@ -227,7 +227,7 @@ public class Node {
   }
 
   /**
-   * ノードを生成する
+   * Generate a node
    */
   public void createNode() {
 
@@ -249,9 +249,9 @@ public class Node {
   }
 
   /**
-   * 最多訪問回数のノードのActionを返す
+   * Return the action of the most visited node
    *
-   * @return 最多訪問回数のノードのAction
+   * @return  Action of the most visited node
    */
   public Action getBestVisitAction() {
 
@@ -261,7 +261,7 @@ public class Node {
     for (int i = 0; i < children.length; i++) {
 
       if (Ranezi.DEBUG_MODE) {
-        System.out.println("評価値:" + children[i].score / children[i].games + ",試行回数:"
+        System.out.println("Evaluation value:" + children[i].score / children[i].games + ",Number of trials:"
             + children[i].games + ",ucb:" + children[i].ucb + ",Action:" + myActions.get(i));
       }
 
@@ -272,7 +272,7 @@ public class Node {
     }
 
     if (Ranezi.DEBUG_MODE) {
-      System.out.println(myActions.get(selected) + ",全試行回数:" + games);
+      System.out.println(myActions.get(selected) + ",Total number of trails:" + games);
       System.out.println("");
     }
 
@@ -280,9 +280,9 @@ public class Node {
   }
 
   /**
-   * 最多スコアのノードのActionを返す
+   * Return the action of the highest score node
    *
-   * @return 最多スコアのノードのAction
+   * @return Action of the highest score node
    */
   public Action getBestScoreAction() {
 
@@ -291,7 +291,7 @@ public class Node {
 
     for (int i = 0; i < children.length; i++) {
 
-      System.out.println("評価値:" + children[i].score / children[i].games + ",試行回数:"
+      System.out.println("Evaluation value:" + children[i].score / children[i].games + ",Number of trials:"
           + children[i].games + ",ucb:" + children[i].ucb + ",Action:" + myActions.get(i));
 
       double meanScore = children[i].score / children[i].games;
@@ -301,17 +301,17 @@ public class Node {
       }
     }
 
-    System.out.println(myActions.get(selected) + ",全試行回数:" + games);
+    System.out.println(myActions.get(selected) + ",Total number of trails:" + games);
     System.out.println("");
 
     return this.myActions.get(selected);
   }
 
   /**
-   * 評価値を返す
+   * Return the evaluation value
    *
-   * @param fd フレームデータ(これにhpとかの情報が入っている)
-   * @return 評価値
+   * @param fd frame data (including information such as hp)
+   * @return the evaluation value
    */
   public int getScore(FrameData fd) {
     return playerNumber ? (fd.getP1().hp - myOriginalHp) - (fd.getP2().hp - oppOriginalHp) : (fd
@@ -319,21 +319,21 @@ public class Node {
   }
 
   /**
-   * 評価値と全プレイアウト試行回数とそのActionのプレイアウト試行回数からUCB1値を返す
+   * Return the UCB1 value calculated from the evaluation value, the total number of playouts(trails), and the number of playouts of the corresponding action
    *
-   * @param score 評価値
-   * @param n 全プレイアウト試行回数
-   * @param ni そのActionのプレイアウト試行回数
-   * @return UCB1値
+   * @param score Evaluation value
+   * @param n Total number of trails
+   * @param ni The number of playouts of the corresponding action
+   * @return UCB1 value
    */
   public double getUcb(double score, int n, int ni) {
     return score + UCB_C * Math.sqrt((2 * Math.log(n)) / ni);
   }
 
   public void printNode(Node node) {
-    System.out.println("全試行回数:" + node.games);
+    System.out.println("Total number of trails:" + node.games);
     for (int i = 0; i < node.children.length; i++) {
-      System.out.println(i + ",回数:" + node.children[i].games + ",深さ:" + node.children[i].depth
+      System.out.println(i + ",Trails:" + node.children[i].games + ",Depth:" + node.children[i].depth
           + ",score:" + node.children[i].score / node.children[i].games + ",ucb:"
           + node.children[i].ucb);
     }
